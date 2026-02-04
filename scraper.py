@@ -4,11 +4,33 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
+def tokenize_text(text: str):
+    tokens = []
+    word = []
+
+    for ch in text:
+        if ch.isalnum() and ch.isascii():
+            word.append(ch.lower())
+        elif ch == "'" and word:
+            continue
+        else:
+            if word:
+                tokens.append("".join(word))
+                word.clear()
+    
+    if word:
+        tokens.append("".join(word))
+    
+    return tokens
+
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp):
+    #Safety so it won't crash on bad responses
+    if resp.status != 200 or not resp.raw_response or not resp.raw_response.content:
+        return []
     # Implementation required.
     # url: the URL that was used to get the page
     # resp.url: the actual url of the page
@@ -19,16 +41,19 @@ def extract_next_links(url, resp):
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
     soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
+    text = soup.get_text(separator=" ")
+    tokens = tokenize_text(text)
+    token_count = len(tokens)
     links = []
 
     for anchor in soup.find_all('a', href=True):
         link = anchor['href']
 
-        absolute_url = urljoin(url, link)
+        absolute_url = urljoin(url, link).split('#')[0]
         # not adding duplicates and link to self
         if absolute_url not in links and absolute_url != url:
             # remove fragment
-            links.append(absolute_url.split('#')[0])
+            links.append(absolute_url)
 
     return links
 
