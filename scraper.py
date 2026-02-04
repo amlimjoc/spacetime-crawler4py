@@ -25,8 +25,10 @@ def extract_next_links(url, resp):
         link = anchor['href']
 
         absolute_url = urljoin(url, link)
-        if absolute_url not in links:
-            links.append(absolute_url)
+        # not adding duplicates and link to self
+        if absolute_url not in links and absolute_url != url:
+            # remove fragment
+            links.append(absolute_url.split('#')[0])
 
     return links
 
