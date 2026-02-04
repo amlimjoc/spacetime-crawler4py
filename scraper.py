@@ -18,17 +18,27 @@ def extract_next_links(url, resp):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
+    if resp is None or not hasattr(resp, "status"):
+        return []
+    if resp.status != 200:
+        return []
+    if not hasattr(resp, "raw_response") or resp.raw_response is None:
+        return []
+    if not hasattr(resp.raw_response, "content") or not resp.raw_response.content:
+        return []
     soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
     links = []
 
     for anchor in soup.find_all('a', href=True):
         link = anchor['href']
+        if link.startswith(('mailto:', 'javascript:', 'tel:')):
+            continue
 
-        absolute_url = urljoin(url, link)
+        absolute_url = urljoin(url, link).split('#')[0]
         # not adding duplicates and link to self
         if absolute_url not in links and absolute_url != url:
             # remove fragment
-            links.append(absolute_url.split('#')[0])
+            links.append(absolute_url)
 
     return links
 
