@@ -25,7 +25,8 @@ def extract_next_links(url, resp):
         link = anchor['href']
 
         absolute_url = urljoin(url, link)
-        links.append(absolute_url)
+        if absolute_url not in links:
+            links.append(absolute_url)
 
     return links
 
