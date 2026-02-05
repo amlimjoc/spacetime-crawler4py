@@ -77,6 +77,11 @@ def is_valid(url):
         if parsed.scheme not in set(["http", "https"]):
             return False
         
+        # avoid calendar links/trap using keywords in queries
+        trap_keywords = ['calendar', 'date', 'year', 'month', 'day', 'time', 'ical', 'outlook-ical', 'tribe-bar-date']
+        if any(keyword in parsed.path.lower() for keyword in trap_keywords):
+            return False
+        
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
         domain = parsed.netloc
         if not any(domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
