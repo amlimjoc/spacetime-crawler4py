@@ -81,7 +81,9 @@ def is_valid(url):
         trap_keywords = ['calendar', 'date', 'year', 'month', 'day', 'time', 'ical', 'outlook-ical', 'tribe-bar-date']
         if any(keyword in parsed.path.lower() for keyword in trap_keywords):
             return False
-        
+        # avoid traps with too many parameters
+        if parsed.query.count("&") > 2:
+            return False
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
         domain = parsed.netloc
         if not any(domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
