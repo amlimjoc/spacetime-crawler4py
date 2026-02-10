@@ -1,5 +1,7 @@
 import re
 from urllib.parse import urlparse
+UNIQUE_URLS = set()
+LONGEST_PAGE = {"url": None, "token_count": 0}
 
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -11,15 +13,20 @@ def tokenize_text(text: str):
     for ch in text:
         if ch.isalnum() and ch.isascii():
             word.append(ch.lower())
+            #ignore apostrophes inside words
         elif ch == "'" and word:
             continue
         else:
             if word:
-                tokens.append("".join(word))
+                tok = "".join(word)
+                #don't add 1-letter tokens
+                if len(tok) > 1:
+                    tokens.append(tok)
                 word.clear()
-    
     if word:
-        tokens.append("".join(word))
+        tok = "".join(word)
+        if len(tok) > 1:
+            tokens.append(tok)
     
     return tokens
 
@@ -52,6 +59,14 @@ def extract_next_links(url, resp):
     text = soup.get_text(separator=" ")
     tokens = tokenize_text(text)
     token_count = len(tokens)
+    page_url = resp.url.split('#')[0] if hasattr(resp, "url") else url.split('#')[0]
+
+    if page_url not in UNIQUE_URLS:
+        UNIQUE_URLS.add(page_url)
+
+        if token_count > LONGEST_PAGE["token_count"]:
+            LONGEST_PAGE["token_count"] = token_count
+            LONGEST_PAGE["url"] = page_url
     links = []
 
     for anchor in soup.find_all('a', href=True):
@@ -59,9 +74,9 @@ def extract_next_links(url, resp):
         if link.startswith(('mailto:', 'javascript:', 'tel:')):
             continue
 
-        absolute_url = urljoin(url, link).split('#')[0]
+        absolute_url = urljoin(page_url, link).split('#')[0]
         # not adding duplicates and link to self
-        if absolute_url not in links and absolute_url != url:
+        if absolute_url not in links and absolute_url != page_url:
             # remove fragment
             links.append(absolute_url)
 
