@@ -1,10 +1,25 @@
 import re
-from urllib.parse import urlparse
-UNIQUE_URLS = set()
-LONGEST_PAGE = {"url": None, "token_count": 0}
+from collections import Counter, defaultdict
+from urllib.parse import urlparse, urljoin, parse_qs
 
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+
+# global crawl stats
+UNIQUE_URLS = set()
+LONGEST_PAGE = {"url": None, "token_count": 0}
+WORD_COUNTS = Counter()
+SUBDOMAIN_PAGE_COUNTS = defaultdict(int)
+CONTENT_SIGNATURES = {}
+
+STOP_WORDS = {
+    "a", "an", "the", "and", "or", "but", "if", "then", "else",
+    "for", "on", "in", "at", "by", "to", "of", "from", "with",
+    "is", "are", "was", "were", "be", "been", "being",
+    "this", "that", "these", "those",
+    "it", "its", "as", "so", "we", "you", "he", "she", "they",
+    "them", "his", "her", "their", "our", "us",
+    "about", "into", "over", "under", "up", "down", "out", "off",
+}
 
 def tokenize_text(text: str):
     tokens = []
@@ -55,11 +70,20 @@ def extract_next_links(url, resp):
         return []
     if not hasattr(resp.raw_response, "content") or not resp.raw_response.content:
         return []
-    soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
+
+    content = resp.raw_response.content
+
+    # html filter trap
+    if len(content) > 2_000_000:
+        return []
+
+    soup = BeautifulSoup(content, 'html.parser')
     text = soup.get_text(separator=" ")
     tokens = tokenize_text(text)
     token_count = len(tokens)
     page_url = resp.url.split('#')[0] if hasattr(resp, "url") else url.split('#')[0]
+    parsed_page = urlparse(page_url)
+    hostname = parsed_page.netloc.lower()
 
     if page_url not in UNIQUE_URLS:
         UNIQUE_URLS.add(page_url)
@@ -67,6 +91,27 @@ def extract_next_links(url, resp):
         if token_count > LONGEST_PAGE["token_count"]:
             LONGEST_PAGE["token_count"] = token_count
             LONGEST_PAGE["url"] = page_url
+
+        # common words tracking
+        for tok in tokens:
+            if tok not in STOP_WORDS:
+                WORD_COUNTS[tok] += 1
+
+        if hostname.endswith(".uci.edu") or hostname == "uci.edu":
+            SUBDOMAIN_PAGE_COUNTS[hostname] += 1
+
+    # Low-information trap
+    if token_count < 20:
+        return []
+
+    # content trap using a simple prefix of tokens as "signature"
+    token_prefix = tuple(tokens[:50])
+    signature_key = (hostname, parsed_page.path, token_prefix)
+    first_seen_url = CONTENT_SIGNATURES.get(signature_key)
+    if first_seen_url is not None and first_seen_url != page_url:
+        return []
+    CONTENT_SIGNATURES[signature_key] = page_url
+
     links = []
 
     for anchor in soup.find_all('a', href=True):
@@ -96,9 +141,28 @@ def is_valid(url):
         trap_keywords = ['calendar', 'date', 'year', 'month', 'day', 'time', 'ical', 'outlook-ical', 'tribe-bar-date']
         if any(keyword in parsed.path.lower() for keyword in trap_keywords):
             return False
+
         # avoid traps with too many parameters
         if parsed.query.count("&") > 2:
             return False
+
+        # path repetition
+        segments = [seg for seg in parsed.path.split("/") if seg]
+        numeric_segments = [seg for seg in segments if seg.isdigit()]
+        if len(numeric_segments) >= 3:
+            return False
+
+        # session id trap
+        query_params = parse_qs(parsed.query)
+        session_like_keys = {
+            "sessionid", "sid", "phpsessid", "jsessionid",
+            "asp-session-id", "aspsessionid",
+        }
+        for key in query_params.keys():
+            key_lower = key.lower()
+            if key_lower in session_like_keys or "session" in key_lower:
+                return False
+
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
         domain = parsed.netloc
         if not any(domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
@@ -117,3 +181,17 @@ def is_valid(url):
     except TypeError:
         print ("TypeError for ", parsed)
         raise
+
+
+def get_crawl_stats():
+    """
+    answers to questions
+    """
+    top_words = WORD_COUNTS.most_common(50)
+    subdomains_sorted = dict(sorted(SUBDOMAIN_PAGE_COUNTS.items()))
+    return {
+        "unique_page_count": len(UNIQUE_URLS),
+        "longest_page": LONGEST_PAGE,
+        "top_words": top_words,
+        "subdomains": subdomains_sorted,
+    }
