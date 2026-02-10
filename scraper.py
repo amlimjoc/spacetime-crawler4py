@@ -100,11 +100,11 @@ def extract_next_links(url, resp):
         if hostname.endswith(".uci.edu") or hostname == "uci.edu":
             SUBDOMAIN_PAGE_COUNTS[hostname] += 1
 
-    # Low-information trap
+    # low information trap
     if token_count < 20:
         return []
 
-    # content trap using a simple prefix of tokens as "signature"
+    # content trap uses first 50 tokens to identify duplicates
     token_prefix = tuple(tokens[:50])
     signature_key = (hostname, parsed_page.path, token_prefix)
     first_seen_url = CONTENT_SIGNATURES.get(signature_key)
@@ -144,6 +144,15 @@ def is_valid(url):
 
         # avoid traps with too many parameters
         if parsed.query.count("&") > 2:
+            return False
+
+        # identical page trap
+        query_lower = parsed.query.lower()
+        if "view=" in query_lower or "expanded=" in query_lower:
+            return False
+
+        # filter trap
+        if "filter" in query_lower or "affiliation" in query_lower:
             return False
 
         # path repetition
