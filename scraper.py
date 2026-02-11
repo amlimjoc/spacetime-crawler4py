@@ -142,10 +142,6 @@ def is_valid(url):
         if any(keyword in parsed.path.lower() for keyword in trap_keywords):
             return False
 
-        # avoid traps with too many parameters
-        if parsed.query.count("&") > 2:
-            return False
-
         # identical page trap
         query_lower = parsed.query.lower()
         if "view=" in query_lower or "expanded=" in query_lower:
@@ -170,12 +166,32 @@ def is_valid(url):
         # wiki revision trap
         if "rev=" in query_lower:
             return False
-
-        # path repetition
+        
+        # path repetition / numeric traps
         segments = [seg for seg in parsed.path.split("/") if seg]
+        if len(segments) > 8:
+            return False
+
+        # too many purely numeric segments (often calendars or IDs)
         numeric_segments = [seg for seg in segments if seg.isdigit()]
         if len(numeric_segments) >= 3:
             return False
+
+        # path repetition detection
+        if segments:
+            # adjacent duplicate segments
+            for i in range(len(segments) - 1):
+                if segments[i] == segments[i + 1]:
+                    return False
+
+            # same segment repeated many times
+            if any(segments.count(seg) >= 3 for seg in set(segments)):
+                return False
+
+            if len(segments) >= 4 and len(segments) % 2 == 0:
+                half = len(segments) // 2
+                if segments[:half] == segments[half:]:
+                    return False
 
         # session id trap
         query_params = parse_qs(parsed.query)
@@ -191,27 +207,12 @@ def is_valid(url):
             return False 
         
         #gitlab: rej large browsing areas
-        if host == "gitlab.ics.uci.edu":
-            blocked = (
-                "/-/commit", "/-/commits", "/-/tree", "/-/blob", "/-/raw",
-                "/-/tags", "/-/issues", "/-/merge_requests", "/-/pipelines",
-                "/-/jobs", "/-/compare", "/-/wikis",
-            ) 
-            if any(b in path_lower for b in blocked):
-                return False
-            if "view" in qkeys:
-                return False 
-        
+        gitTraps = ['commit', 'tree', 'blob', 'diff', 'blame', 'compare']
+        if any(trap in parsed.path.lower() for trap in gitTraps):
+            return False
         #autoindex sort trap
         if "c" in qkeys and "o" in qkeys:
             return False 
-        
-        blocked_query_keys = {
-            "do", "tab_files", "tab_details", "image", "ns", "idx", "rev", "mediado",
-            "share", "ical", "outlook-ical", "tribe-bar-date"
-        }
-        if qkeys & blocked_query_keys:
-            return False
 
         host = (parsed.hostname or "").lower()
         
@@ -231,9 +232,27 @@ def is_valid(url):
         # redirector/social sharing traps
         if "r.php?next=" in url.lower() or "facebook.com" in url.lower():
             return False
-        
-        # very long query strings too many parameters
-        if len(parsed.query) > 100 or parsed.query.count("&") > 4:
+
+        # date-pattern regex blocking (calendar/date traps)
+        path_lower = parsed.path.lower()
+
+        # YYYY/MM[/DD] or YYYY-MM-DD
+        if re.search(r"/(19|20)\d{2}/(0[1-9]|1[0-2])/", path_lower):
+            return False
+        if re.search(r"/(19|20)\d{2}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])", path_lower):
+            return False
+
+        # ?date=2024-01-01 or start=2024/01/01
+        date_param_keys = {"date", "start", "end", "from", "to", "day", "month", "year"}
+        date_value_regex = re.compile(r"^(19|20)\d{2}([-/.]?(0[1-9]|1[0-2]))([-/.]?(0[1-9]|[12]\d|3[01]))?$")
+        for k, vals in query_params.items():
+            if k.lower() in date_param_keys:
+                for v in vals:
+                    if date_value_regex.match(v.strip()):
+                        return False
+
+        # very long query strings / too many parameters
+        if len(parsed.query) > 100 or parsed.query.count("&") > 2:
             return False
         
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
