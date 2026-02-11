@@ -154,9 +154,21 @@ def is_valid(url):
         # filter trap
         if "filter" in query_lower or "affiliation" in query_lower:
             return False
-        
-        # wiki revision / diff trap
-        if "rev=" in query_lower or "do=diff" in query_lower:
+
+        # block any do= 
+        if "do=" in query_lower:
+            return False
+
+        # index trap
+        if "idx=" in query_lower:
+            return False
+
+        # namespace trap
+        if "ns=" in query_lower or "tab_" in query_lower:
+            return False
+
+        # wiki revision trap
+        if "rev=" in query_lower:
             return False
 
         # path repetition
