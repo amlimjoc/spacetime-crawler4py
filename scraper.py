@@ -85,6 +85,10 @@ def extract_next_links(url, resp):
     parsed_page = urlparse(page_url)
     hostname = parsed_page.netloc.lower()
 
+    # low information page trap
+    if token_count < 20:
+        return []
+
     if page_url not in UNIQUE_URLS:
         UNIQUE_URLS.add(page_url)
 
@@ -99,10 +103,6 @@ def extract_next_links(url, resp):
 
         if hostname.endswith(".uci.edu") or hostname == "uci.edu":
             SUBDOMAIN_PAGE_COUNTS[hostname] += 1
-
-    # low information trap
-    if token_count < 20:
-        return []
 
     # content trap uses first 50 tokens to identify duplicates
     token_prefix = tuple(tokens[:50])
@@ -153,6 +153,10 @@ def is_valid(url):
 
         # filter trap
         if "filter" in query_lower or "affiliation" in query_lower:
+            return False
+        
+        # wiki revision / diff trap
+        if "rev=" in query_lower or "do=diff" in query_lower:
             return False
 
         # path repetition
