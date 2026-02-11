@@ -179,6 +179,42 @@ def is_valid(url):
 
         # session id trap
         query_params = parse_qs(parsed.query)
+
+        #bonus filtering/optimizing
+        #host = domain, path_lower = path (but lowercased), qkeys = set of query parameter names
+        host = (parsed.hostname or "").lower()
+        path_lower = parsed.path.lower()
+        qkeys = {k.lower() for k in query_params.keys()}
+
+        #wiki: rej query variants
+        if host in {"wiki.ics.uci.edu", "swiki.ics.uci.edu"} and parsed.query:
+            return False 
+        
+        #gitlab: rej large browsing areas
+        if host == "gitlab.ics.uci.edu":
+            blocked = (
+                "/-/commit", "/-/commits", "/-/tree", "/-/blob", "/-/raw",
+                "/-/tags", "/-/issues", "/-/merge_requests", "/-/pipelines",
+                "/-/jobs", "/-/compare", "/-/wikis",
+            ) 
+            if any(b in path_lower for b in blocked):
+                return False
+            if "view" in qkeys:
+                return False 
+        
+        #autoindex sort trap
+        if "c" in qkeys and "o" in qkeys:
+            return False 
+        
+        blocked_query_keys = {
+            "do", "tab_files", "tab_details", "image", "ns", "idx", "rev", "mediado",
+            "share", "ical", "outlook-ical", "tribe-bar-date"
+        }
+        if qkeys & blocked_query_keys:
+            return False
+
+        host = (parsed.hostname or "").lower()
+        
         session_like_keys = {
             "sessionid", "sid", "phpsessid", "jsessionid",
             "asp-session-id", "aspsessionid",
@@ -189,8 +225,15 @@ def is_valid(url):
                 return False
 
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
-        domain = parsed.netloc
-        if not any(domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
+
+        #old was:
+        # domain = parsed.netloc
+        # if not any(domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
+        #     return False
+        # netloc can have ports and the endwith filtering also allows bad lookalikes to pass through. new one is stricterr
+
+        domain = (parsed.hostname or "").lower()
+        if not any(domain == d or domain.endswith("." + d) for d in allowed_domains):
             return False
         
         return not re.match(
