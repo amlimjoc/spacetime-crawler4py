@@ -187,7 +187,19 @@ def is_valid(url):
             key_lower = key.lower()
             if key_lower in session_like_keys or "session" in key_lower:
                 return False
-
+        
+        # dokuwiki trap
+        if "doku.php" in parsed.path.lower():
+            return False
+        
+        # redirector/social sharing traps
+        if "r.php?next=" in url.lower() or "facebook.com" in url.lower():
+            return False
+        
+        # very long query strings too many parameters
+        if len(parsed.query) > 100 or parsed.query.count("&") > 4:
+            return False
+        
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
         domain = parsed.netloc
         if not any(domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
