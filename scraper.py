@@ -139,7 +139,7 @@ def is_valid(url):
         
         # avoid calendar links/trap using keywords in queries
         trap_keywords = ['calendar', 'date', 'year', 'month', 'day', 'time', 'ical', 'outlook-ical', 'tribe-bar-date']
-        if any(keyword in parsed.path.lower() for keyword in trap_keywords):
+        if any(keyword in parsed.path.lower() or keyword in parsed.query.lower() for keyword in trap_keywords):
             return False
 
         # identical page trap
@@ -252,7 +252,7 @@ def is_valid(url):
                         return False
 
         # very long query strings / too many parameters
-        if len(parsed.query) > 100 or parsed.query.count("&") > 2:
+        if len(parsed.query) > 200 or parsed.query.count("&") > 4:
             return False
         
         allowed_domains = ['ics.uci.edu', 'cs.uci.edu', 'informatics.uci.edu', 'stat.uci.edu']
