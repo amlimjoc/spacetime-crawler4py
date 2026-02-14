@@ -137,9 +137,10 @@ def is_valid(url):
         if parsed.scheme not in set(["http", "https"]):
             return False
         
-        # avoid calendar links/trap using keywords in queries
+        # avoid calendar links/trap using keywords in path or query
         trap_keywords = ['calendar', 'date', 'year', 'month', 'day', 'time', 'ical', 'outlook-ical', 'tribe-bar-date']
-        if any(keyword in parsed.path.lower() for keyword in trap_keywords):
+        combined = (parsed.path + " " + parsed.query).lower()
+        if any(keyword in combined for keyword in trap_keywords):
             return False
 
         # identical page trap
