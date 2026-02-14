@@ -294,3 +294,20 @@ def get_crawl_stats():
         "top_words": top_words,
         "subdomains": subdomains_sorted,
     }
+
+
+def print_crawl_stats():
+    """Print crawl stats to stdout"""
+    stats = get_crawl_stats()
+    print(f"Unique pages: {stats['unique_page_count']}")
+    lp = stats['longest_page']
+    print(f"Longest page: {lp['token_count']} tokens -> {lp['url']}")
+    print("\nTop 50 words:")
+    for word, count in stats['top_words']:
+        print(f"  {word}: {count}")
+    print("\nSubdomains (pages):")
+    for host, count in stats['subdomains'].items():
+        print(f"  {host}: {count}")
+
+if __name__ == "__main__":
+    print_crawl_stats()
