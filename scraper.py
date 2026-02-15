@@ -148,29 +148,33 @@ def is_valid(url):
 
         # identical page trap
         query_lower = parsed.query.lower()
-        if "view=" in query_lower or "expanded=" in query_lower:
+
+        query_traps = [
+            "view=",
+            "expanded=",
+            "filter",
+            "affiliation",
+            "do=",
+            "idx=",
+            "ns=",
+            "tab_",
+            "rev=",
+            "action=",
+            "sort', 
+            'order', 
+            'orderby', 
+            'search', 
+            'filter', 
+            'limit', 
+            'page', 
+            'p', 
+            'skip', 
+            'take'
+        ]
+
+        if any(trap in query_lower for trap in query_traps):
             return False
 
-        # filter trap
-        if "filter" in query_lower or "affiliation" in query_lower:
-            return False
-
-        # block any do= 
-        if "do=" in query_lower:
-            return False
-
-        # index trap
-        if "idx=" in query_lower:
-            return False
-
-        # namespace trap
-        if "ns=" in query_lower or "tab_" in query_lower:
-            return False
-
-        # wiki revision trap
-        if "rev=" in query_lower:
-            return False
-        
         # path repetition / numeric traps
         segments = [seg for seg in parsed.path.split("/") if seg]
         if len(segments) > 8:
