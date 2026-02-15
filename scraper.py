@@ -206,15 +206,20 @@ def is_valid(url):
         query_params = parse_qs(parsed.query)
         host = (parsed.hostname or "").lower()
         path_lower = parsed.path.lower()
+
+        # Filter out eppstein/pix directory
+        if '/eppstein/pix/' in path_lower or path_lower.startswith('/~eppstein/pix/'):
+            return False
+            
         qkeys = {k.lower() for k in query_params.keys()}
 
         #wiki: rej query variants
-        if host in {"wiki.ics.uci.edu", "swiki.ics.uci.edu", "grape.ics.uci.edu"} and parsed.query:
+        if host in {"wiki.ics.uci.edu", "swiki.ics.uci.edu"} and parsed.query:
             return False 
         
         #gitlab: rej large browsing areas
         git_traps = ['commit', 'tree', 'blob', 'diff', 'blame', 'compare']
-        if any(trap in parsed.path.lower() for trap in gitTraps):
+        if any(trap in parsed.path.lower() for trap in git_traps):
             return False
         #autoindex sort trap
         if "c" in qkeys and "o" in qkeys:
@@ -238,7 +243,7 @@ def is_valid(url):
             if key_lower in session_like_keys or "session" in key_lower:
                 return False
         
-       path_lower = parsed.path.lower()
+        path_lower = parsed.path.lower()
 
         # dokuwiki trap
         if "doku.php" in path_lower:
