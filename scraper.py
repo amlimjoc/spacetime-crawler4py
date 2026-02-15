@@ -118,8 +118,11 @@ def extract_next_links(url, resp):
         link = anchor['href']
         if link.startswith(('mailto:', 'javascript:', 'tel:')):
             continue
-
-        absolute_url = urljoin(page_url, link).split('#')[0]
+        
+        try:
+            absolute_url = urljoin(page_url, link).split('#')[0]
+        except ValueError:
+            continue
         # not adding duplicates and link to self
         if absolute_url not in links and absolute_url != page_url:
             # remove fragment
@@ -215,6 +218,13 @@ def is_valid(url):
         if "c" in qkeys and "o" in qkeys:
             return False 
 
+        #trap from version/format parameter
+        if "version" in qkeys:
+            return False
+
+        if "format" in qkeys:
+            return False
+
         host = (parsed.hostname or "").lower()
         
         session_like_keys = {
@@ -234,14 +244,29 @@ def is_valid(url):
         if "r.php?next=" in url.lower() or "facebook.com" in url.lower():
             return False
 
+        #diff mode
+        if "action=diff" in query_lower:
+            return False
+
         # date-pattern regex blocking (calendar/date traps)
         path_lower = parsed.path.lower()
 
-        # YYYY/MM[/DD] or YYYY-MM-DD
-        if re.search(r"/(19|20)\d{2}/(0[1-9]|1[0-2])/", path_lower):
-            return False
-        if re.search(r"/(19|20)\d{2}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])", path_lower):
-            return False
+        date_regexes = [
+            r'\d{4}-\d{2}-\d{2}',   # YYYY-MM-DD
+            r'\d{4}/\d{2}/\d{2}',   # YYYY/MM/DD
+            r'\d{4}\.\d{2}\.\d{2}', # YYYY.MM.DD
+            r'\d{2}-\d{2}-\d{4}',   # MM-DD-YYYY
+            r'\d{2}/\d{2}/\d{4}',   # MM/DD/YYYY
+            r'\d{4}-\d{2}',         # YYYY-MM
+            r'\d{4}/\d{2}',         # YYYY/MM
+            r'\d{2}-\d{4}',         # MM-YYYY
+            r'\d{2}/\d{4}',         # MM/YYYY
+            r'\d{4}\.\d{2}',        # YYYY.MM
+        ]
+
+        for pattern in date_regexes:
+            if re.search(pattern, path_lower):
+                return False
 
         # ?date=2024-01-01 or start=2024/01/01
         date_param_keys = {"date", "start", "end", "from", "to", "day", "month", "year"}
