@@ -326,7 +326,7 @@ def get_crawl_stats():
 
 
 def print_crawl_stats():
-    """Print crawl stats to stdout"""
+    """Print crawl stats"""
     stats = get_crawl_stats()
     print(f"Unique pages: {stats['unique_page_count']}")
     lp = stats['longest_page']
