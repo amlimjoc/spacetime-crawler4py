@@ -146,7 +146,7 @@ def is_valid(url):
         if any(keyword in combined for keyword in trap_keywords):
             return False
 
-        # identical page trap
+        # super trap list
         query_lower = parsed.query.lower()
 
         query_traps = [
@@ -160,7 +160,7 @@ def is_valid(url):
             "tab_",
             "rev=",
             "action=",
-            "sort', 
+            'sort', 
             'order', 
             'orderby', 
             'search', 
@@ -169,7 +169,7 @@ def is_valid(url):
             'page', 
             'p', 
             'skip', 
-            'take'
+            'take',
         ]
 
         if any(trap in query_lower for trap in query_traps):
@@ -177,6 +177,7 @@ def is_valid(url):
 
         # path repetition / numeric traps
         segments = [seg for seg in parsed.path.split("/") if seg]
+        
         if len(segments) > 8:
             return False
 
@@ -203,19 +204,16 @@ def is_valid(url):
 
         # session id trap
         query_params = parse_qs(parsed.query)
-
-        #bonus filtering/optimizing
-        #host = domain, path_lower = path (but lowercased), qkeys = set of query parameter names
         host = (parsed.hostname or "").lower()
         path_lower = parsed.path.lower()
         qkeys = {k.lower() for k in query_params.keys()}
 
         #wiki: rej query variants
-        if host in {"wiki.ics.uci.edu", "swiki.ics.uci.edu"} and parsed.query:
+        if host in {"wiki.ics.uci.edu", "swiki.ics.uci.edu", "grape.ics.uci.edu"} and parsed.query:
             return False 
         
         #gitlab: rej large browsing areas
-        gitTraps = ['commit', 'tree', 'blob', 'diff', 'blame', 'compare']
+        git_traps = ['commit', 'tree', 'blob', 'diff', 'blame', 'compare']
         if any(trap in parsed.path.lower() for trap in gitTraps):
             return False
         #autoindex sort trap
@@ -240,8 +238,10 @@ def is_valid(url):
             if key_lower in session_like_keys or "session" in key_lower:
                 return False
         
+       path_lower = parsed.path.lower()
+
         # dokuwiki trap
-        if "doku.php" in parsed.path.lower():
+        if "doku.php" in path_lower:
             return False
         
         # redirector/social sharing traps
@@ -251,9 +251,12 @@ def is_valid(url):
         #diff mode
         if "action=diff" in query_lower:
             return False
+        
+        #attachments trap
+        if any(seg in path_lower for seg in ["raw-attachment", "attachment", "zip-attachment"]):
+            return False
 
         # date-pattern regex blocking (calendar/date traps)
-        path_lower = parsed.path.lower()
 
         date_regexes = [
             r'\d{4}-\d{2}-\d{2}',   # YYYY-MM-DD
@@ -271,15 +274,6 @@ def is_valid(url):
         for pattern in date_regexes:
             if re.search(pattern, path_lower):
                 return False
-
-        # ?date=2024-01-01 or start=2024/01/01
-        date_param_keys = {"date", "start", "end", "from", "to", "day", "month", "year"}
-        date_value_regex = re.compile(r"^(19|20)\d{2}([-/.]?(0[1-9]|1[0-2]))([-/.]?(0[1-9]|[12]\d|3[01]))?$")
-        for k, vals in query_params.items():
-            if k.lower() in date_param_keys:
-                for v in vals:
-                    if date_value_regex.match(v.strip()):
-                        return False
 
         # very long query strings / too many parameters
         if len(parsed.query) > 100 or parsed.query.count("&") > 2:
