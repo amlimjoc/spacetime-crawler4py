@@ -197,6 +197,7 @@ def is_valid(url):
             if any(segments.count(seg) >= 3 for seg in set(segments)):
                 return False
 
+            # /a/b/a/b
             if len(segments) >= 4 and len(segments) % 2 == 0:
                 half = len(segments) // 2
                 if segments[:half] == segments[half:]:
