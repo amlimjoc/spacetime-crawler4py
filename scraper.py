@@ -243,8 +243,6 @@ def is_valid(url):
             key_lower = key.lower()
             if key_lower in session_like_keys or "session" in key_lower:
                 return False
-        
-        path_lower = parsed.path.lower()
 
         # dokuwiki trap
         if "doku.php" in path_lower:
