@@ -1,6 +1,7 @@
 import re
 from collections import Counter, defaultdict
 from urllib.parse import urlparse, urljoin, parse_qs
+from nltk.stem import PorterStemmer
 
 from bs4 import BeautifulSoup
 
@@ -24,24 +25,28 @@ STOP_WORDS = {
 def tokenize_text(text: str):
     tokens = []
     word = []
+    stemmer = PorterStemmer()  # Initialize the stemmer
 
     for ch in text:
         if ch.isalnum() and ch.isascii():
             word.append(ch.lower())
-            #ignore apostrophes inside words
         elif ch == "'" and word:
             continue
         else:
             if word:
                 tok = "".join(word)
-                #don't add 1-letter tokens
+                # don't add 1-letter tokens
                 if len(tok) > 1:
-                    tokens.append(tok)
+                    # Apply stemming
+                    stemmed_token = stemmer.stem(tok)
+                    tokens.append(stemmed_token)
                 word.clear()
+    
     if word:
         tok = "".join(word)
         if len(tok) > 1:
-            tokens.append(tok)
+            stemmed_token = stemmer.stem(tok)
+            tokens.append(stemmed_token)
     
     return tokens
 
