@@ -125,7 +125,6 @@ def extract_next_links(url, resp):
             continue
         # not adding duplicates and link to self
         if absolute_url not in links and absolute_url != page_url:
-            # remove fragment
             links.append(absolute_url)
 
     return links
