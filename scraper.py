@@ -50,23 +50,6 @@ def tokenize_text(text: str):
     
     return tokens
 
-def build_inverted_index(documents):
-    inverted_index = {}
-
-    # Loop over all documents
-    for doc_id, content in documents.items():
-        # Tokenize and stem the content of the document
-        tokens = tokenize_text(content)
-
-        # Loop over all tokens in the document
-        for token in tokens:
-            # Add the document to the list of documents for this token
-            if token not in inverted_index:
-                inverted_index[token] = []
-            inverted_index[token].append(doc_id)
-    
-    return inverted_index
-
 def scraper(url, resp):
     links = extract_next_links(url, resp)
     return [link for link in links if is_valid(link)]
