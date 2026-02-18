@@ -8,7 +8,6 @@ def build_inverted_index(documents):
     '''
     Takes a list of documents, creates an inverted index where each token maps to every doc it appears.
 
-    
     :param documents: A dictionary of documents where a doc_id maps to it's content.
 
     Returns:
@@ -31,11 +30,22 @@ def build_inverted_index(documents):
     return inverted_index
 
 def save_index(index, path=INDEX_PATH):
+    '''
+    Docstring for save_index
+    
+    :param index: Description
+    :param path: Description
+    '''
     with open(path, "w") as f:
         json.dump(index, f)
 
 
 def load_index(path=INDEX_PATH):
+    '''
+    Docstring for load_index
+    
+    :param path: Description
+    '''
     with open(path, "r") as f:
         return json.load(f)
 
@@ -62,6 +72,12 @@ def calculate_tf(doc_tokens):
 
 
 def get_index_stats(index, documents):
+    '''
+    Docstring for get_index_stats
+    
+    :param index: Description
+    :param documents: Description
+    '''
     return {
         "num_documents": len(documents),
         "num_unique_tokens": len(index),
@@ -70,6 +86,9 @@ def get_index_stats(index, documents):
 
 
 def print_index_stats():
+    '''
+    Docstring for print_index_stats
+    '''
     # Example placeholder documents loader
     documents = load_documents()   # must return {doc_id: content}
 
