@@ -21,11 +21,11 @@ STOP_WORDS = {
     "them", "his", "her", "their", "our", "us",
     "about", "into", "over", "under", "up", "down", "out", "off",
 }
+stemmer = PorterStemmer()  # Initialize the stemmer
 
 def tokenize_text(text: str):
     tokens = []
     word = []
-    stemmer = PorterStemmer()  # Initialize the stemmer
 
     for ch in text:
         if ch.isalnum() and ch.isascii():
