@@ -3,20 +3,18 @@ import os
 from scraper import tokenize_text
 
 INDEX_PATH = "inverted_index.json"
+# Put the DEV folder with all the web pages in the same directory as this script
+DEV_FOLDER_PATH = "DEV"
 
-def build_inverted_index(documents):
+def build_inverted_index(document_generator):
     '''
-    Takes a list of documents, creates an inverted index where each token maps to every doc it appears.
-
-    :param documents: A dictionary of documents where a doc_id maps to it's content.
-
-    Returns:
-        A dictionary with each token and their respective docs.
+    creates an inverted index where each token maps to every doc it appears
     '''
     inverted_index = {}
+    doc_count = 0
 
-    # for every document, get the tokens, get their respective tf value, create an inverted index
-    for doc_id, content in documents.items():
+    for doc_id, content in document_generator:
+        doc_count += 1
         tokens = tokenize_text(content)
 
         tf = calculate_tf(tokens)
@@ -27,34 +25,17 @@ def build_inverted_index(documents):
 
             inverted_index[token].append((doc_id, score))
 
-    return inverted_index
+    return inverted_index, doc_count
 
 def save_index(index, path=INDEX_PATH):
-    '''
-    Docstring for save_index
-    
-    :param index: Description
-    :param path: Description
-    '''
-    with open(path, "w") as f:
+    '''saves the index to a json file'''
+    with open(path, "w", encoding='utf-8') as f:
         json.dump(index, f)
-
-
-def load_index(path=INDEX_PATH):
-    '''
-    Docstring for load_index
-    
-    :param path: Description
-    '''
-    with open(path, "r") as f:
-        return json.load(f)
 
 
 def calculate_tf(doc_tokens):
     '''
-    Given a list of tokens from a document, return a dictionary containing each token and it's tf value.
-    
-    :param doc_tokens: A list of tokens.
+    make dictionary containing each token and its tf value.
     '''
     tf = {}
     total_tokens = len(doc_tokens)
@@ -71,44 +52,49 @@ def calculate_tf(doc_tokens):
     return tf
 
 
-def get_index_stats(index, documents):
-    '''
-    Docstring for get_index_stats
-    
-    :param index: Description
-    :param documents: Description
-    '''
+def get_index_stats(index, doc_count):
     return {
-        "num_documents": len(documents),
+        "num_documents": doc_count,
         "num_unique_tokens": len(index),
         "index_size_kb": os.path.getsize(INDEX_PATH) / 1024 if os.path.exists(INDEX_PATH) else 0
     }
 
+def load_documents(dev_path):
+    """
+    Walks through the directory and yields (doc_id, content) for each JSON file.
+    """
+    for root, dirs, files in os.walk(dev_path):
+        for file in files:
+            if file.endswith(".json"):
+                file_path = os.path.join(root, file)
+                
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        
+                        doc_id = file_path
+                        
+                        content = data.get("content", "")
+                        
+                        if content:
+                            yield doc_id, content
+                            
+                except Exception as e:
+                    print(f"{e}")
 
 def print_index_stats():
-    '''
-    Docstring for print_index_stats
-    '''
-    # Example placeholder documents loader
-    documents = load_documents()   # must return {doc_id: content}
+    '''build, save, and print stats'''
+    document_generator = load_documents(DEV_FOLDER_PATH)
 
-    index = build_inverted_index(documents)
+    index, doc_count = build_inverted_index(document_generator)
+    
     save_index(index)
 
-    stats = get_index_stats(index, documents)
+    stats = get_index_stats(index, doc_count)
 
     print(f"Indexed Documents: {stats['num_documents']}")
     print(f"Unique Tokens: {stats['num_unique_tokens']}")
     print(f"Index Size (KB): {stats['index_size_kb']:.2f}")
-
-
-def load_documents():
-    """
-    Replace with your dataset loader.
-    Must return: {doc_id: content}
-    """
-    return {}
-
 
 if __name__ == "__main__":
     print_index_stats()
