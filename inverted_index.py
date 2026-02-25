@@ -27,6 +27,9 @@ def build_inverted_index(documents):
 
             inverted_index[token].append((doc_id, score))
 
+        for token in inverted_index:
+            inverted_index[token].sort(key=lambda x: x[0])
+            
     return inverted_index
 
 def save_index(index, path=INDEX_PATH):
