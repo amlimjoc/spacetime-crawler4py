@@ -83,12 +83,6 @@ def build_inverted_index(document_generator):
 
     return inverted_index, doc_id_map
 
-<<<<<<< HEAD
-        for token in inverted_index:
-            inverted_index[token].sort(key=lambda x: x[0])
-            
-    return inverted_index
-=======
 def load_documents(dev_path):
     for root, _, files in os.walk(dev_path):
         for file in files:
@@ -100,7 +94,6 @@ def load_documents(dev_path):
                         yield data.get("url"), data.get("content", "")
                 except:
                     continue
->>>>>>> a34894a977d19399bf79ceb82a0feb80cf82feab
 
 def print_index_stats():    
     idx, id_map = build_inverted_index(load_documents(DEV_FOLDER_PATH))
