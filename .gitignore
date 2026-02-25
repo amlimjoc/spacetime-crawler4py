@@ -108,3 +108,7 @@ venv.bak/
 
 *.full.py
 *.shelve
+
+DEV
+doc_id_map.json 
+inverted_index.json
