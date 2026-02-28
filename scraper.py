@@ -26,7 +26,7 @@ stemmer = PorterStemmer()  # Initialize the stemmer
 def tokenize_text(text: str):
     tokens = []
     word = []
-
+    
     for ch in text:
         if ch.isalnum() and ch.isascii():
             word.append(ch.lower())
@@ -35,19 +35,14 @@ def tokenize_text(text: str):
         else:
             if word:
                 tok = "".join(word)
-                # don't add 1-letter tokens
-                if len(tok) > 1:
-                    # Apply stemming
-                    stemmed_token = stemmer.stem(tok)
-                    tokens.append(stemmed_token)
+                if not tok.isdigit() and 1 < len(tok) < 30:
+                    tokens.append(stemmer.stem(tok))
                 word.clear()
-    
+                
     if word:
         tok = "".join(word)
-        if len(tok) > 1:
-            stemmed_token = stemmer.stem(tok)
-            tokens.append(stemmed_token)
-    
+        if not tok.isdigit() and 1 < len(tok) < 30:
+            tokens.append(stemmer.stem(tok))
     return tokens
 
 def scraper(url, resp):
