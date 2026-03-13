@@ -1,7 +1,6 @@
 import json
 import math
 import time
-from urllib.parse import urlparse
 from flask import Flask, request, render_template_string
 from nltk.stem import PorterStemmer
 
@@ -13,32 +12,20 @@ stemmer = PorterStemmer()
 INDEX_PATH = "inverted_index.json"
 INDEX_META_PATH = "inverted_index_meta.json"
 ID_MAP_PATH = "doc_id_map.json"
-PAGERANK_PATH = "pagerank.json"
 
 index_meta = {}
 doc_id_map = {}
-pagerank_map = {}
-pagerank_min = 1.0
 index_file = None
 
 
 def load_data():
-    global index_meta, doc_id_map, pagerank_map, index_file
+    global index_meta, doc_id_map, index_file
     
     with open(INDEX_META_PATH, "r", encoding="utf-8") as f:
         index_meta = json.load(f)
     with open(ID_MAP_PATH, "r", encoding="utf-8") as f:
         doc_id_map = json.load(f)
-        
-    try:
-        with open(PAGERANK_PATH, "r", encoding="utf-8") as f:
-            pagerank_map = json.load(f)
-        pagerank_min = min(pagerank_map.values()) if pagerank_map else 1.0
-    except FileNotFoundError:
-        pagerank_map = {}
-        pagerank_min = 1.0
 
-    # keep the file handle open for fast O(1) seeks during web requests
     index_file = open(INDEX_PATH, "r", encoding="utf-8")
 
 
@@ -59,14 +46,24 @@ def _read_postings_for_token(token):
     except Exception:
         return 0, []
 
-
-def _augment_query_tokens_with_ngrams(tokens):
-    ngrams = []
-    for i in range(len(tokens) - 1):
-        ngrams.append(tokens[i] + " " + tokens[i + 1])
-    for i in range(len(tokens) - 2):
-        ngrams.append(tokens[i] + " " + tokens[i + 1] + " " + tokens[i + 2])
-    return ngrams
+def _count_ngram_occurrences(ngram_tokens, term_pos_dict):
+    if not all(t in term_pos_dict for t in ngram_tokens):
+        return 0
+        
+    occurrences = 0
+    first_token = ngram_tokens[0]
+    
+    for pos in term_pos_dict[first_token]:
+        is_match = True
+        for i in range(1, len(ngram_tokens)):
+            if (pos + i) not in term_pos_dict[ngram_tokens[i]]:
+                is_match = False
+                break
+        
+        if is_match:
+            occurrences += 1
+            
+    return occurrences
 
 
 def retrieve_and_rank(query: str):
@@ -75,35 +72,32 @@ def retrieve_and_rank(query: str):
     query_tokens = tokenize_text(query)
     if not query_tokens:
         return [], 0.0
+
+    bigrams = []
+    for i in range(len(query_tokens) - 1):
+        bigrams.append([query_tokens[i], query_tokens[i+1]])
         
-    ngrams = _augment_query_tokens_with_ngrams(query_tokens)
-    unigrams_set = set(query_tokens)
-    all_scoring_tokens = query_tokens + ngrams
+    trigrams = []
+    for i in range(len(query_tokens) - 2):
+        trigrams.append([query_tokens[i], query_tokens[i+1], query_tokens[i+2]])
 
     total_docs = len(doc_id_map)
 
-    # soft conjunction
-    token_info = {}  # token is (w_qt, idf, postings)
+    token_info = {} 
     query_counts = {}
-    for t in all_scoring_tokens:
+    for t in query_tokens:
         query_counts[t] = query_counts.get(t, 0) + 1
 
     q_norm_sq = 0.0
 
-    for token in set(all_scoring_tokens):
+    for token in set(query_tokens):
         df, postings = _read_postings_for_token(token)
         if df == 0:
             continue
 
         idf = math.log10(total_docs / df) if df > 0 else 0.0
-        is_ngram = " " in token
-        denominator = max(1, len(query_tokens) - token.count(" ")) if is_ngram else len(query_tokens)
-        tf_q = query_counts.get(token, 0) / denominator
+        tf_q = query_counts[token] / len(query_tokens)
         w_qt = tf_q * idf
-
-        # emphasize n-grams directly in the query vector
-        if is_ngram:
-            w_qt *= 2.0
 
         if w_qt == 0.0:
             continue
@@ -114,9 +108,8 @@ def retrieve_and_rank(query: str):
     if q_norm_sq == 0.0:
         return [], 0.0
 
-    # cosine normalization
     doc_scores = {}
-    doc_norm_sq = {}
+    doc_term_positions = {}
     docs_with_unigram = set()
 
     for token, (w_qt, idf, postings) in token_info.items():
@@ -124,6 +117,7 @@ def retrieve_and_rank(query: str):
             doc_id = posting[0]
             tf = posting[1]
             is_imp = posting[2]
+            positions = posting[3] 
 
             weight_multiplier = 1.5 if is_imp == 1 else 1.0
             w_dt = tf * idf * weight_multiplier
@@ -131,48 +125,49 @@ def retrieve_and_rank(query: str):
             if w_dt == 0.0:
                 continue
 
-            if token in unigrams_set:
-                docs_with_unigram.add(doc_id)
+            docs_with_unigram.add(doc_id)
+            doc_scores[doc_id] = doc_scores.get(doc_id, 0.0) + (w_dt * w_qt)
 
-            prev_score = doc_scores.get(doc_id, 0.0)
-            doc_scores[doc_id] = prev_score + w_dt * w_qt
-
-            prev_norm = doc_norm_sq.get(doc_id, 0.0)
-            doc_norm_sq[doc_id] = prev_norm + w_dt * w_dt
+            if doc_id not in doc_term_positions:
+                doc_term_positions[doc_id] = {}
+            doc_term_positions[doc_id][token] = set(positions)
 
     if not docs_with_unigram:
         return [], 0.0
 
     q_norm = math.sqrt(q_norm_sq)
-
-    # combine with pagerank
     ranked_docs = []
+    
     for doc_id, dot_product in doc_scores.items():
-        if doc_id not in docs_with_unigram:
+        doc_info = doc_id_map.get(str(doc_id))
+        if not doc_info:
+            continue
+            
+        url = doc_info[0]
+        d_norm = doc_info[1] 
+
+        if d_norm <= 0.0:
             continue
 
-        d_norm_sq = doc_norm_sq.get(doc_id, 0.0)
-        if d_norm_sq == 0.0:
-            continue
+        ngram_boost = 0.0
+        term_pos_dict = doc_term_positions[doc_id]
+        
+        for bg in bigrams:
+            occurrences = _count_ngram_occurrences(bg, term_pos_dict)
+            ngram_boost += occurrences * 0.5 
+            
+        for tg in trigrams:
+            occurrences = _count_ngram_occurrences(tg, term_pos_dict)
+            ngram_boost += occurrences * 1.0 
 
-        d_norm = math.sqrt(d_norm_sq)
-        cosine_score = dot_product / (q_norm * d_norm)
-
-        url = doc_id_map[str(doc_id)]
-        
-        pr_score = pagerank_map.get(url, pagerank_min)
-        
-        # log of page rank + tf idf
-        final_score = cosine_score * math.log10(10 + pr_score) 
-        
+        # add ngram boost to the cosine similarity 
+        final_score = (dot_product / (d_norm * q_norm)) + ngram_boost
         ranked_docs.append((url, final_score))
 
-    #top 20 ranked docs
     ranked_docs = sorted(ranked_docs, key=lambda item: item[1], reverse=True)[:20]
     
-    elapsed_time = (time.time() - start_time) * 1000 # convert to ms
+    elapsed_time = (time.time() - start_time) * 1000
     return ranked_docs, elapsed_time
-
 
 
 HTML_TEMPLATE = """

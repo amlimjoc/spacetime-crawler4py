@@ -110,3 +110,7 @@ venv.bak/
 *.shelve
 
 DEV
+anchor_tokens.json
+inverted_index_meta.json
+inverted_index.json
+doc_id_map.json

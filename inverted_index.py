@@ -18,9 +18,6 @@ ANCHOR_MAP_PATH = "anchor_tokens.json"
 stemmer = PorterStemmer()
 
 def get_tokens_from_soup(soup):
-    """
-    extracts tokens and identifies important ones.
-    """
     all_text = soup.get_text()
     all_tokens = tokenize_text(all_text)
 
@@ -55,15 +52,10 @@ def tokenize_text(text: str):
 
 
 def _compute_simhash(token_positions):
-    """
-    64bit simhash
-    """
     vector = [0] * 64
     for token, positions in token_positions.items():
         weight = len(positions)
-        h = 0
-        for ch in token:
-            h = (h * 131 + ord(ch)) & ((1 << 64) - 1)
+        h = hash(token) & ((1 << 64) - 1) 
 
         for bit in range(64):
             if h & (1 << bit):
@@ -78,9 +70,6 @@ def _compute_simhash(token_positions):
 
 
 def _calculate_similarity(hash_a, hash_b):
-    """
-    calculate similarity between two simhashes
-    """
     xor = hash_a ^ hash_b
     diff_count = 0
     while xor:
@@ -91,9 +80,6 @@ def _calculate_similarity(hash_a, hash_b):
 
 
 def _write_partial_index(index_dict, partial_idx):
-    """
-    write partial index to file
-    """
     if not index_dict:
         return
     filename = f"{PARTIAL_INDEX_PREFIX}{partial_idx}.json"
@@ -105,13 +91,10 @@ def _write_partial_index(index_dict, partial_idx):
 
 
 def _build_anchor_index(anchor_map, doc_id_map):
-    """
-    build anchor index from anchor map and doc id map
-    """
     if not anchor_map:
         return {}
-    # reverse lookup: url to doc_id
-    url_to_doc_id = {url: int(doc_id) for doc_id, url in doc_id_map.items()}
+    # reverse lookup: url to doc_id (handle new [url, doc_len] structure)
+    url_to_doc_id = {info[0]: int(doc_id) for doc_id, info in doc_id_map.items()}
 
     anchor_index = {}
 
@@ -137,17 +120,12 @@ def _build_anchor_index(anchor_map, doc_id_map):
 
 
 def _merge_partial_indexes_to_disk(partial_files, anchor_map, doc_id_map):
-    """
-    merge of sorted partial index files, writing directly to INDEX_PATH
-    and recording per-term offsets and document frequencies.
-    """
     anchor_index = _build_anchor_index(anchor_map, doc_id_map)
     if anchor_index:
         anchor_idx = len(partial_files)
         _write_partial_index(anchor_index, anchor_idx)
         partial_files.append(f"{PARTIAL_INDEX_PREFIX}{anchor_idx}.json")
 
-    # open all partials and read first line from each
     active = []
     for path in partial_files:
         try:
@@ -181,7 +159,6 @@ def _merge_partial_indexes_to_disk(partial_files, anchor_map, doc_id_map):
             for item in active:
                 if item["current_token"] == min_token:
                     merged_postings.extend(item["current_postings"])
-                    # advance this file
                     line = item["file"].readline()
                     if line:
                         token, postings = json.loads(line)
@@ -193,7 +170,6 @@ def _merge_partial_indexes_to_disk(partial_files, anchor_map, doc_id_map):
                 else:
                     next_active.append(item)
             merged_postings.sort(key=lambda p: p[0])
-            # record where this term starts for O(1) seek lookups
             offset = out_f.tell()
             df = len(merged_postings)
             term_metadata[min_token] = [offset, df]
@@ -202,7 +178,6 @@ def _merge_partial_indexes_to_disk(partial_files, anchor_map, doc_id_map):
             out_f.write("\n")
             active = next_active
 
-    # clean up partial files
     for item in active:
         try:
             item["file"].close()
@@ -215,7 +190,6 @@ def _merge_partial_indexes_to_disk(partial_files, anchor_map, doc_id_map):
         except OSError:
             pass
 
-    # write term offsets and document frequencies for fast lookup
     with open(INDEX_META_PATH, "w", encoding="utf-8") as meta_f:
         json.dump(term_metadata, meta_f)
 
@@ -233,7 +207,6 @@ def build_inverted_index(document_generator):
     for url, html_content in document_generator:
         soup = BeautifulSoup(html_content, "html.parser")
 
-        # Remove script and style
         for script_or_style in soup(["script", "style"]):
             script_or_style.decompose()
 
@@ -243,33 +216,14 @@ def build_inverted_index(document_generator):
         if total_tokens == 0:
             continue
 
-        # positions for unigrams
+        # positions for unigrams only
         token_positions = {}
         for idx, tok in enumerate(all_tokens):
             positions = token_positions.setdefault(tok, [])
             positions.append(idx)
 
-        # add 2-grams
-        for idx in range(len(all_tokens) - 1):
-            bigram = all_tokens[idx] + " " + all_tokens[idx + 1]
-            positions = token_positions.setdefault(bigram, [])
-            positions.append(idx)
-
-        # add 3-grams
-        for idx in range(len(all_tokens) - 2):
-            trigram = (
-                all_tokens[idx]
-                + " "
-                + all_tokens[idx + 1]
-                + " "
-                + all_tokens[idx + 2]
-            )
-            positions = token_positions.setdefault(trigram, [])
-            positions.append(idx)
-
         simhash = _compute_simhash(token_positions)
         is_duplicate = False
-        
         SIM_THRESHOLD = 0.95 
 
         for prev in fingerprints:
@@ -288,9 +242,27 @@ def build_inverted_index(document_generator):
         if current_doc_id % 500 == 0:
             print(f"{current_doc_id} docs")
 
-        doc_id_map[current_doc_id] = url
+        # Calculate true vector length for the whole document
+        doc_norm_sq = 0.0
 
-        # anchor text collection
+        # add postings and calculate doc vector norm
+        for token, positions in token_positions.items():
+            tf_weighted = 1 + math.log10(len(positions))
+            tf_score = tf_weighted / total_tokens
+            is_imp = 1 if any(word in important_tokens for word in token.split()) else 0
+            
+            # Calculate weight for vector length (using TF * importance multiplier)
+            weight_multiplier = 1.5 if is_imp == 1 else 1.0
+            w_dt = tf_score * weight_multiplier
+            doc_norm_sq += (w_dt * w_dt)
+
+            postings = inverted_index.setdefault(token, [])
+            postings.append([current_doc_id, round(tf_score, 5), is_imp, positions])
+
+        # Store URL and Document Vector Length
+        doc_len = math.sqrt(doc_norm_sq)
+        doc_id_map[current_doc_id] = [url, doc_len]
+
         for anchor in soup.find_all("a", href=True):
             href = anchor.get("href")
             if not href:
@@ -308,16 +280,6 @@ def build_inverted_index(document_generator):
             bucket = anchor_map.setdefault(target_url, [])
             bucket.extend(anchor_tokens)
 
-        # add postings with positions for each token / ngrams
-        for token, positions in token_positions.items():
-            tf_weighted = 1 + math.log10(len(positions))
-            tf_score = tf_weighted / total_tokens
-            
-            is_imp = 1 if any(word in important_tokens for word in token.split()) else 0
-            postings = inverted_index.setdefault(token, [])
-            postings.append([current_doc_id, round(tf_score, 5), is_imp, positions])
-
-        # partial index flush
         if docs_since_flush >= PARTIAL_INDEX_THRESHOLD:
             _write_partial_index(inverted_index, partial_index_counter)
             partial_index_counter += 1
@@ -332,10 +294,8 @@ def build_inverted_index(document_generator):
         if f.startswith(PARTIAL_INDEX_PREFIX) and f.endswith(".json")
     ]
 
-    # merge to final
     _merge_partial_indexes_to_disk(partial_files, anchor_map, doc_id_map)
 
-    # persist anchor map
     try:
         with open(ANCHOR_MAP_PATH, "w", encoding="utf-8") as f:
             json.dump(anchor_map, f)
