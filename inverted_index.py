@@ -93,7 +93,6 @@ def _write_partial_index(index_dict, partial_idx):
 def _build_anchor_index(anchor_map, doc_id_map):
     if not anchor_map:
         return {}
-    # reverse lookup: url to doc_id (handle new [url, doc_len] structure)
     url_to_doc_id = {info[0]: int(doc_id) for doc_id, info in doc_id_map.items()}
 
     anchor_index = {}
@@ -205,7 +204,7 @@ def build_inverted_index(document_generator):
     docs_since_flush = 0
 
     for url, html_content in document_generator:
-        soup = BeautifulSoup(html_content, "html.parser")
+        soup = BeautifulSoup(html_content, "lxml")
 
         for script_or_style in soup(["script", "style"]):
             script_or_style.decompose()

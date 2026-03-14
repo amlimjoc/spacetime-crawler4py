@@ -4,7 +4,7 @@ import time
 from flask import Flask, request, render_template_string
 from nltk.stem import PorterStemmer
 
-from scraper import tokenize_text
+from inverted_index import tokenize_text
 
 app = Flask(__name__)
 stemmer = PorterStemmer()
