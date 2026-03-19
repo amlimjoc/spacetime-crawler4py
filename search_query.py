@@ -4,7 +4,7 @@ import time
 from flask import Flask, request, render_template_string
 from nltk.stem import PorterStemmer
 
-from inverted_index import tokenize_text, f
+from inverted_index import tokenize_text
 
 app = Flask(__name__)
 stemmer = PorterStemmer()
@@ -224,7 +224,7 @@ def index():
     if query:
         results, elapsed_time = retrieve_and_rank(query)
 
-    return render_template_string(HTML_TEMPLATE, query=query, results=results, time=f(elapsed_time))
+    return render_template_string(HTML_TEMPLATE, query=query, results=results, time=elapsed_time)
 if __name__ == "__main__":
     load_data()
     app.run(host="127.0.0.1", port=5000, debug=False)

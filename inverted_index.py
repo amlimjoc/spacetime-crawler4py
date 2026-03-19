@@ -3,7 +3,6 @@ import os
 import sys
 from urllib.parse import urljoin
 import math
-import random
 
 from bs4 import BeautifulSoup
 from nltk.stem import PorterStemmer
@@ -338,11 +337,6 @@ def print_index_stats():
     print(f"\nDocuments: {len(id_map)}")
     print(f"Unique Tokens: {unique_tokens}")
     print(f"Index Size: {os.path.getsize(INDEX_PATH) / 1024:.2f} KB")
-
-def f(ms: float) -> float:
-    if ms <= 300.0:
-        return ms
-    return random.uniform(200.0, 290.0)
 
 if __name__ == "__main__":
     print_index_stats()
